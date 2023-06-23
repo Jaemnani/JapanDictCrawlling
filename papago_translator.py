@@ -4,6 +4,7 @@ import urllib.request
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from time import time
 
 excel_file = pd.read_excel("c:/Users/Jaemoon/Synology_Jaemnani/SynologyDrive/study/software/naver_jlpt_words.xlsx")
 hiragana = excel_file[0]
@@ -32,37 +33,44 @@ request.add_header("X-Naver-Client-Secret",client_secret)
 
 for i, m in enumerate(tqdm(means_np)):
     encText = urllib.parse.quote( m )
-    print("target is ", m)
+    # print("target is ", m)
     data = "source=ko&target=en&text=" + encText
-    response = urllib.request.urlopen(request, data=data.encode("utf-8"))
-    rescode = response.getcode()
-    result = []
-    result.append(set_hiragana[i])
-    result.append(set_mean[i])
+    try:
+        response = urllib.request.urlopen(request, data=data.encode("utf-8"))
+        rescode = response.getcode()
+        result = []
+        result.append(set_hiragana[i])
+        result.append(set_mean[i])
 
-    if(rescode == 200):
-        response_body = response.read()
-        # print(response_body.decode('utf-8'))
-        en_result = response_body.decode("utf-8").split("translatedText\":\"")[1].split("\",\"")[0]
-        result.append(en_result)
-        encText = urllib.parse.quote(en_result)
-        for t in targets:
-            data = "source=en&target="+t+"&text=" + encText
-            response = urllib.request.urlopen(request, data=data.encode("utf-8"))
-            rescode = response.getcode()
-        
-            if(rescode==200):
-                response_body = response.read()
-                sub_res = response_body.decode("utf-8").split("translatedText\":\"")[1].split("\",\"")[0]
-                result.append(sub_res)            
-            else:
-                result.append("")
-    else:
-        print("pass")
-        result = ["","","","","","","","","","","","","","",""]
+        if(rescode == 200):
+            response_body = response.read()
+            # print(response_body.decode('utf-8'))
+            en_result = response_body.decode("utf-8").split("translatedText\":\"")[1].split("\",\"")[0]
+            result.append(en_result)
+            encText = urllib.parse.quote(en_result)
+            for t in targets:
+                data = "source=en&target="+t+"&text=" + encText
+                response = urllib.request.urlopen(request, data=data.encode("utf-8"))
+                rescode = response.getcode()
+            
+                if(rescode==200):
+                    response_body = response.read()
+                    sub_res = response_body.decode("utf-8").split("translatedText\":\"")[1].split("\",\"")[0]
+                    result.append(sub_res)            
+                else:
+                    result.append("")
+        else:
+            print("pass")
+            result = ["","","","","","","","","","","","","","",""]
+    except:
+        print("API Linit OVER? ", i,"th word")
+        break
     total_targets = np.vstack((total_targets, np.array(result)))    
-    print(result)
+    # print(result)
 
-df = pd.DataFrame(total_targets)
-df.to_excel("./allclass_translator.xlsx", index=False)
+if total_targets.ndim > 1:
+    df = pd.DataFrame(total_targets)
+    df.to_excel("./allclass_translator"+str(int(time()))+".xlsx", index=False)
+else:
+    print("didnt append datas.")
 print("done")
