@@ -10,17 +10,20 @@
   - 중복 행
   - 번역 파일이 주어지면 번역 누락 단어 수
 --probe:
+  - 목록 상단의 "N급, 전체, 3,246건" 총 개수와 크롤링된 개수(중복 제외)를 비교
   - 레벨별로 (크롤링된 개수 / 페이지당 개수) 다음 페이지를 명시적 대기 후 열어봐서
     단어가 더 있으면 크롤링이 중간에 끊겼거나 페이지가 누락된 것.
 """
 import argparse
 import math
+import re
 import sys
 
 from wordbook_io import HANGUL_RE, KANA_RE, KANJI_RE, load_crawl, load_translations
 
 LIST_URL = "https://ja.dict.naver.com/#/jlpt/list?level={level}&part=allClass&page={page}"
 LIST_SELECTOR = "#my_jlpt_list_template"
+TOTAL_RE = re.compile(r"급,\s*전체,\s*([\d,]+)\s*건")
 
 
 def offline_checks(df):
@@ -97,15 +100,28 @@ def probe(df, timeout):
         text = driver.find_element(By.CSS_SELECTOR, LIST_SELECTOR).text
         return len(text.split("\n")) // 3
 
+    def site_total():
+        m = TOTAL_RE.search(driver.find_element(By.TAG_NAME, "body").text)
+        return int(m.group(1).replace(",", "")) if m else None
+
+    unique = df.drop_duplicates(["japanese", "hanmoon", "level", "pos", "meaning"])
     incomplete = 0
     try:
         print("\n[probe] 네이버 JLPT 목록과 비교")
-        for level, n in df.groupby("level").size().items():
+        for level, n in unique.groupby("level").size().items():
             page_size = count_entries(level, 1)
             if page_size == 0:
                 print(f"  N{level}: 1페이지를 읽지 못함 (선택자/사이트 구조 변경 확인 필요)")
                 incomplete += 1
                 continue
+            total = site_total()
+            if total is None:
+                print(f"  N{level}: 사이트 총 개수를 찾지 못함")
+            elif total != n:
+                incomplete += 1
+                print(f"  N{level}: 사이트 {total} 건 / 크롤링 {n} 건 -> {total - n:+d} 차이")
+            else:
+                print(f"  N{level}: 사이트 {total} 건 / 크롤링 {n} 건 일치")
             last = math.ceil(n / page_size)
             after = count_entries(level, last + 1)
             status = "OK" if after == 0 else f"미완료: {last + 1} 페이지에 {after} 개 더 있음"
