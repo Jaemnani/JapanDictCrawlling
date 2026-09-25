@@ -34,12 +34,19 @@ def offline_checks(df):
     # 이후 행이 모두 밀려서 단어 칸에 한글이 들어가거나 뜻 칸에 한글이 없어진다.
     bad_word = ~df.japanese.str.contains(KANA_RE) & ~df.japanese.str.contains(KANJI_RE)
     bad_word |= df.japanese.str.contains(HANGUL_RE)
-    bad_mean = ~df.meaning.str.contains(HANGUL_RE)
+    ref_only = df.meaning.map(lambda m: bool(m) and all(x.strip().startswith(("→", "⇒")) for x in m.split("\n")))
+    bad_mean = ~df.meaning.str.contains(HANGUL_RE) & ~ref_only
     shifted = df[(bad_word | bad_mean) & (df.japanese != "")]
     if len(shifted):
         problems += len(shifted)
         print(f"\n[줄 밀림 의심] {len(shifted)} 행 (단어 칸에 일본어가 없거나, 뜻 칸에 한글이 없음)")
         print(shifted.head(20).to_string(index=False))
+
+    if ref_only.any():
+        unresolved = df[ref_only & (df.ref_meaning == "")]
+        print(f"\n[참고] 뜻이 '→다른단어' 참조뿐인 단어 {int(ref_only.sum())} 개, 그중 참조 뜻(RefMean)이 없는 단어 {len(unresolved)} 개")
+        if len(unresolved):
+            print(unresolved[["japanese", "hanmoon", "level", "meaning"]].head(10).to_string(index=False))
 
     key = ["japanese", "hanmoon", "level", "pos", "meaning"]
     dup = df[df.duplicated(key, keep=False)]

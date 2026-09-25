@@ -13,6 +13,7 @@ import argparse
 import html
 import os
 import random
+import re
 
 import pandas as pd
 
@@ -26,6 +27,15 @@ ANKI_MODEL_REVERSE_ID = 1607392320
 ANKI_DECK_BASE_ID = 2059400110
 
 
+REF_NUM_RE = re.compile(r"\d+$")  # →おおばん2 처럼 동음이의어 번호
+
+
+def dedupe_variants(hanmoon):
+    """'後片付け·跡片付け·後片付け·跡片付け' -> '後片付け·跡片付け'"""
+    parts = hanmoon.replace("∙", "·").split("·")
+    return "·".join(dict.fromkeys(p for p in parts if p)) if len(parts) > 1 else hanmoon
+
+
 def build_entries(df, translations=None):
     """크롤링 행 -> 단어 단위 엔트리.
 
@@ -36,15 +46,37 @@ def build_entries(df, translations=None):
     if translations is not None and "en" in translations.columns:
         en_map = dict(zip(zip(translations.ja, translations.ko), translations.en))
 
+    def split_meanings(text):
+        return [m.strip() for m in text.split("\n") if m.strip()]
+
+    # 네이버는 표준형이 따로 있는 단어의 뜻을 "→あとしまつ" 처럼 참조로만 준다.
+    # 크롤러가 채운 ref_meaning 이 없으면(예전 파일) 참조 대상이 데이터에 있을 때 그 뜻을 가져온다.
+    own_meanings = {}
+    for r in df.itertuples(index=False):
+        ms = split_meanings(r.meaning)
+        if ms and not all(m.startswith(("→", "⇒")) for m in ms):
+            own_meanings.setdefault(r.japanese, ms)
+
+    def resolve(ms):
+        if not ms or not all(m.startswith(("→", "⇒")) for m in ms):
+            return ms
+        out = []
+        for m in ms:
+            target = REF_NUM_RE.sub("", m.lstrip("→⇒").strip().rstrip("。"))
+            out += [f"(= {target}) {t}" for t in own_meanings.get(target, [])[:1]] + own_meanings.get(target, [])[1:]
+            if target not in own_meanings:
+                out.append(m)
+        return out
+
     rows = []
     for r in df.itertuples(index=False):
-        word, reading = split_headword(r.japanese, r.hanmoon)
+        word, reading = split_headword(r.japanese, dedupe_variants(r.hanmoon))
         rows.append({
             "word": word,
             "reading": reading,
             "level": r.level,
             "pos": [p.strip() for p in r.pos.split(",") if p.strip()],
-            "meanings": [m.strip() for m in r.meaning.split("\n") if m.strip()],
+            "meanings": split_meanings(r.ref_meaning) or resolve(split_meanings(r.meaning)),
             "english": en_map.get((r.japanese, r.meaning), ""),
         })
     flat = pd.DataFrame(rows)

@@ -19,6 +19,7 @@ CRAWL_COLUMNS = {
     "level": "level",
     "class": "pos",
     "mean": "meaning",
+    "refmean": "ref_meaning",
 }
 
 
@@ -39,12 +40,14 @@ def load_crawl(path):
     """크롤링 결과 xlsx -> columns: japanese, hanmoon, level, pos, meaning (+ 원본 row 번호).
 
     meaning 은 뜻이 여러 개면 줄바꿈으로 구분되어 있다 (API 크롤러). pos 는 "명사, 동사" 처럼 쉼표 구분.
+    ref_meaning 은 뜻이 '→あとしまつ' 같은 참조뿐인 단어에 크롤러가 채운 참조 대상의 뜻.
     """
     df = _read_labeled_sheet(path, "japanese")
     df = df.rename(columns={c: CRAWL_COLUMNS[c.lower()] for c in df.columns if c.lower() in CRAWL_COLUMNS})
-    if "pos" not in df.columns:
-        df["pos"] = ""
-    cols = ["japanese", "hanmoon", "level", "pos", "meaning"]
+    for c in ("pos", "ref_meaning"):
+        if c not in df.columns:
+            df[c] = ""
+    cols = ["japanese", "hanmoon", "level", "pos", "meaning", "ref_meaning"]
     df = df[cols + ["xlsx_row"]].copy()
     for c in cols:
         df[c] = df[c].astype(str).str.strip()
