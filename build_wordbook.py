@@ -62,7 +62,7 @@ def build_entries(df, translations=None):
             return ms
         out = []
         for m in ms:
-            target = REF_NUM_RE.sub("", m.lstrip("→⇒").strip().rstrip("。"))
+            target = REF_NUM_RE.sub("", m.lstrip("→⇒").strip().rstrip("。")).strip()
             out += [f"(= {target}) {t}" for t in own_meanings.get(target, [])[:1]] + own_meanings.get(target, [])[1:]
             if target not in own_meanings:
                 out.append(m)

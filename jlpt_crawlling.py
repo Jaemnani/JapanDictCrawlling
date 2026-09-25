@@ -133,7 +133,7 @@ def resolve_refs(rows, delay):
             continue
         resolved = []
         for m in ms:
-            target = REF_NUM_RE.sub("", m.lstrip("→⇒").strip().rstrip("。"))
+            target = REF_NUM_RE.sub("", m.lstrip("→⇒").strip().rstrip("。")).strip()
             means = own.get(target)
             if means is None:
                 time.sleep(delay)
