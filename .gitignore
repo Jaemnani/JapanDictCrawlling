@@ -2,3 +2,4 @@ __pycache__/
 wordbook/
 *.xlsx
 naver_jlpt_raw.json
+jlpt_wordbook.zip
