@@ -32,7 +32,8 @@ source_file_length = len(excel_file) -1
 save_file_length = len(save_file)
 if save_file_length > 1:
     total_targets = save_file.to_numpy()
-    seq = save_file_length
+    # 첫 행은 라벨(ja, ko, en, ...) 이므로 번역 완료 개수는 len - 1
+    seq = save_file_length - 1
     set_hiragana = set_hiragana[seq:]
     set_mean = set_mean[seq:]
 else :
