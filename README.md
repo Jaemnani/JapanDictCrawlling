@@ -10,6 +10,7 @@
 | `papago_translator.py` | 한국어 뜻 → 영어 → 12개 언어 번역 (Papago API, 일일 한도 넘으면 이어하기) | `allclass_translator.xlsx` |
 | `check_crawl.py` | 크롤링 결과 완전성 검증 | 콘솔 리포트 (문제 있으면 exit 1) |
 | `build_wordbook.py` | 크롤링 결과 → 단어장 | `wordbook/` |
+| `discover_naver.py` | 사이트 구조 조사 (품사별 `part=` 값, 목록 API 주소·응답 샘플, 항목 HTML) | `naver_site_info.json` |
 
 ```bash
 pip install -r requirement.txt
