@@ -37,7 +37,6 @@ python check_crawl.py naver_jlpt_words_allclass.xlsx --probe   # 크롬 필요
    예외가 안 나는 경우(줄 수 합이 우연히 3의 배수)에는 이후 행이 밀린 채 저장된다.
 3. 페이지마다 새 Chrome 을 띄우고 `quit()` 하지 않아서 긴 실행 중 메모리 부족으로 죽을 수 있다.
 4. (품사별 모드) 뜻에 공백이 없으면 품사/뜻 분리 개수가 어긋나 2번과 같은 이유로 페이지가 버려진다.
-
 5. (품사별 모드) 크롤러의 `category` 목록(noun, verb, adjective, adverb, measurement, phrases, conjunction,
    numeral, pronoun, interjection)이 사이트의 품사 필터(명사, 대명사, 동사, 조사, 형용사, 접사, 부사, 감동사,
    형용동사, 기타)와 다르다. 조사·접사·형용동사·기타에 해당하는 단어는 품사별 모드 결과에 빠져 있을 수 있다.
