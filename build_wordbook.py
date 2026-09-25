@@ -27,7 +27,11 @@ ANKI_DECK_BASE_ID = 2059400110
 
 
 def build_entries(df, translations=None):
-    """크롤링 행 -> 단어 단위 엔트리. 같은 단어/레벨이 품사별로 여러 행이면 하나로 합친다."""
+    """크롤링 행 -> 단어 단위 엔트리.
+
+    뜻은 줄바꿈으로 구분된 여러 개일 수 있고, 예전 품사별 크롤링 결과처럼 같은 단어/레벨이
+    품사별로 여러 행이면 하나로 합친다.
+    """
     en_map = {}
     if translations is not None and "en" in translations.columns:
         en_map = dict(zip(zip(translations.ja, translations.ko), translations.en))
@@ -35,12 +39,12 @@ def build_entries(df, translations=None):
     rows = []
     for r in df.itertuples(index=False):
         word, reading = split_headword(r.japanese, r.hanmoon)
-        meaning = f"[{r.pos}] {r.meaning}" if r.pos else r.meaning
         rows.append({
             "word": word,
             "reading": reading,
             "level": r.level,
-            "meaning": meaning,
+            "pos": [p.strip() for p in r.pos.split(",") if p.strip()],
+            "meanings": [m.strip() for m in r.meaning.split("\n") if m.strip()],
             "english": en_map.get((r.japanese, r.meaning), ""),
         })
     flat = pd.DataFrame(rows)
@@ -48,12 +52,21 @@ def build_entries(df, translations=None):
     def uniq(values):
         return list(dict.fromkeys(v for v in values if v))
 
+    def uniq_flat(lists):
+        return uniq(v for vs in lists for v in vs)
+
     grouped = (
         flat.groupby(["level", "word", "reading"], sort=False)
-        .agg(meanings=("meaning", uniq), english=("english", uniq))
+        .agg(pos=("pos", uniq_flat), meanings=("meanings", uniq_flat), english=("english", uniq))
         .reset_index()
     )
     return grouped.sort_values("level", kind="stable", key=lambda s: s.astype(str)).reset_index(drop=True)
+
+
+def meanings_html(meanings):
+    if len(meanings) == 1:
+        return html.escape(meanings[0])
+    return "<br>".join(f"{i}. {html.escape(m)}" for i, m in enumerate(meanings, 1))
 
 
 def levels_of(entries):
@@ -65,7 +78,9 @@ def write_tsv(entries, path):
         f.write("#separator:tab\n#html:true\n#notetype:Basic\n#deck column:3\n#tags column:4\n")
         for e in entries.itertuples(index=False):
             back = [html.escape(e.reading)] if e.reading else []
-            back.append("<br>".join(html.escape(m) for m in e.meanings))
+            if e.pos:
+                back.append("<small>" + html.escape(", ".join(e.pos)) + "</small>")
+            back.append(meanings_html(e.meanings))
             if e.english:
                 back.append("<small>" + html.escape(", ".join(e.english)) + "</small>")
             cells = [html.escape(e.word), "<br>".join(back), f"JLPT::N{e.level}", f"JLPT N{e.level}"]
@@ -79,7 +94,8 @@ def write_quizlet(entries, out_dir):
         with open(path, "w", encoding="utf-8", newline="") as f:
             for e in entries[entries["level"] == level].itertuples(index=False):
                 term = f"{e.word} ({e.reading})" if e.reading else e.word
-                f.write(f"{term}\t{'; '.join(e.meanings)}\n".replace("\r", ""))
+                meaning = " / ".join(e.meanings)
+                f.write(f"{term}\t{meaning}\n".replace("\r", ""))
         paths.append(path)
     return paths
 
@@ -89,10 +105,12 @@ def write_apkg(entries, path, reverse=False):
 
     css = (
         ".card{font-family:sans-serif;font-size:22px;text-align:center}"
-        ".word{font-size:44px}.reading{color:#666}.en{color:#888;font-size:16px}"
+        ".word{font-size:44px}.reading{color:#666}.pos{color:#999;font-size:14px}"
+        ".meaning{text-align:left;display:inline-block}.en{color:#888;font-size:16px}"
     )
     back = (
-        '<div class="reading">{{Reading}}</div><div>{{Meaning}}</div>'
+        '<div class="reading">{{Reading}}</div><div class="pos">{{Part}}</div>'
+        '<div class="meaning">{{Meaning}}</div>'
         '{{#English}}<div class="en">{{English}}</div>{{/English}}'
     )
     templates = [{
@@ -103,13 +121,13 @@ def write_apkg(entries, path, reverse=False):
     if reverse:
         templates.append({
             "name": "뜻 → 단어",
-            "qfmt": "<div>{{Meaning}}</div>",
+            "qfmt": '<div class="pos">{{Part}}</div><div class="meaning">{{Meaning}}</div>',
             "afmt": '{{FrontSide}}<hr id="answer"><div class="word">{{Word}}</div><div class="reading">{{Reading}}</div>',
         })
     model = genanki.Model(
         ANKI_MODEL_REVERSE_ID if reverse else ANKI_MODEL_ID,
         "JLPT Naver (양방향)" if reverse else "JLPT Naver",
-        fields=[{"name": n} for n in ("Word", "Reading", "Meaning", "English", "Level")],
+        fields=[{"name": n} for n in ("Word", "Reading", "Meaning", "English", "Level", "Part")],
         templates=templates,
         css=css,
     )
@@ -123,9 +141,10 @@ def write_apkg(entries, path, reverse=False):
                 fields=[
                     html.escape(e.word),
                     html.escape(e.reading),
-                    "<br>".join(html.escape(m) for m in e.meanings),
+                    meanings_html(e.meanings),
                     html.escape(", ".join(e.english)),
                     f"N{level}",
+                    html.escape(", ".join(e.pos)),
                 ],
                 tags=[f"JLPT_N{level}"],
                 guid=genanki.guid_for(e.word, e.reading, level),
@@ -143,8 +162,8 @@ body{{font-family:sans-serif;margin:16px;color:#222}}
 h1{{font-size:20px}} .bar{{margin-bottom:12px}} .bar button{{margin-right:6px}}
 table{{border-collapse:collapse;width:100%}}
 th,td{{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}}
-td.no{{color:#999;width:3em}} td.word{{font-size:20px;white-space:nowrap}}
-td.en{{color:#777;font-size:13px}}
+td.no{{color:#999;width:3em}} td.word{{font-size:20px;width:22%}} td.reading{{width:18%}} td{{overflow-wrap:anywhere}}
+td.en{{color:#777;font-size:13px}} .pos{{color:#999;font-size:12px;margin-right:4px}}
 body.hide-reading td.reading span, body.hide-meaning td.meaning span{{visibility:hidden}}
 td.reading.show span, td.meaning.show span{{visibility:visible!important}}
 @media print{{.bar{{display:none}} tr{{break-inside:avoid}}}}
@@ -191,7 +210,9 @@ def write_html(entries, out_dir):
                 f'<td class="no">{n}</td>',
                 f'<td class="word">{html.escape(e.word)}</td>',
                 f'<td class="reading"><span>{html.escape(e.reading)}</span></td>',
-                '<td class="meaning"><span>' + "<br>".join(html.escape(m) for m in e.meanings) + "</span></td>",
+                '<td class="meaning"><span>'
+                + (f'<span class="pos">{html.escape(", ".join(e.pos))}</span><br>' if e.pos else "")
+                + meanings_html(e.meanings) + "</span></td>",
             ]
             if has_en:
                 cells.append(f'<td class="en">{html.escape(", ".join(e.english))}</td>')
