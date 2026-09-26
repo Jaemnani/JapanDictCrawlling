@@ -17,6 +17,8 @@ final class AppSettings: ObservableObject {
     @Published var showHanjaHint: Bool { didSet { defaults.set(showHanjaHint, forKey: "showHanjaHint") } }
 
     init() {
+        // 모든 저장 프로퍼티가 초기화되기 전에는 self.defaults 를 쓸 수 없으므로 지역 상수로 읽는다.
+        let defaults = UserDefaults.standard
         defaults.register(defaults: [
             "dailyNewLimit": 20,
             "dailyNewProductionLimit": 10,
