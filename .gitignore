@@ -3,3 +3,6 @@ wordbook/
 *.xlsx
 naver_jlpt_raw.json
 jlpt_wordbook.zip
+ios/JLPTVocab/Resources/words.json
+xcuserdata/
+*.xcuserstate
