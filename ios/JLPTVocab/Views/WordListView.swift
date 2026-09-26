@@ -77,6 +77,7 @@ private struct WordRow: View {
 struct WordDetailView: View {
     @EnvironmentObject var engine: StudyEngine
     let word: Word
+    @State private var note = ""
 
     var body: some View {
         List {
@@ -99,6 +100,15 @@ struct WordDetailView: View {
                     Text(word.meanings.count > 1 ? "\(i + 1). \(m)" : m)
                 }
             }
+            Section {
+                TextField("예: 経済(けいざい) = 경제, 발음이 '케이자이'", text: $note, axis: .vertical)
+                    .lineLimit(1...4)
+                    .onSubmit { engine.setNote(note, for: word) }
+            } header: {
+                Text("연상 메모")
+            } footer: {
+                Text("스스로 만든 연상은 정답을 볼 때 함께 나옵니다. 연상만으로는 오래 가지 않으므로 복습과 같이 쓰세요.")
+            }
             Section("학습 상태") {
                 ForEach(CardDirection.allCases, id: \.self) { d in
                     LabeledContent(d.label, value: describe(engine.card(for: word, d)))
@@ -107,6 +117,8 @@ struct WordDetailView: View {
         }
         .navigationTitle(word.levelLabel)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { note = engine.note(for: word) }
+        .onDisappear { engine.setNote(note, for: word) }
     }
 
     private func describe(_ c: FSRSCard?) -> String {

@@ -9,7 +9,7 @@ struct StudyView: View {
         VStack(spacing: 0) {
             if let item = engine.current {
                 ScrollView {
-                    CardFace(item: item, revealed: revealed, showHanja: settings.showHanjaHint)
+                    CardFace(item: item, revealed: revealed, showHanja: settings.showHanjaHint, note: engine.note(for: item.word))
                         .padding(.horizontal, 20)
                         .padding(.top, 24)
                         .frame(maxWidth: .infinity)
@@ -74,6 +74,7 @@ struct CardFace: View {
     let item: StudyItem
     let revealed: Bool
     let showHanja: Bool
+    let note: String
 
     var body: some View {
         VStack(spacing: 18) {
@@ -99,6 +100,12 @@ struct CardFace: View {
                     Divider()
                     japanese(showReading: true)
                 }
+            }
+            if revealed && !note.isEmpty {
+                Label(note, systemImage: "lightbulb")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

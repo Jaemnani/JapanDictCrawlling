@@ -29,8 +29,16 @@ struct HomeView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 } footer: {
-                    if counts.reviewLaterToday > 0 {
-                        Text("오늘 중 복습 시기가 오는 카드 \(counts.reviewLaterToday)장이 더 있습니다.")
+                    VStack(alignment: .leading, spacing: 4) {
+                        if counts.newThrottled {
+                            Text("밀린 복습이 많아 오늘은 새 단어를 줄였습니다. 복습을 먼저 정리하면 다시 늘어납니다.")
+                        }
+                        if counts.reviewLaterToday > 0 {
+                            Text("오늘 중 복습 시기가 오는 카드 \(counts.reviewLaterToday)장이 더 있습니다.")
+                        }
+                        if let days = engine.daysToFinish(), days > 0 {
+                            Text("지금 속도(하루 \(settings.dailyNewLimit)개)로 켜 둔 레벨의 새 단어를 모두 보는 데 약 \(days)일.")
+                        }
                     }
                 }
 
@@ -41,7 +49,7 @@ struct HomeView: View {
                 }
 
                 Section {
-                    Text("매일 조금씩, 떠올린 다음에 답을 확인하세요. 기억이 흐려질 즈음 다시 묻도록 FSRS 가 복습 시점을 정합니다.")
+                    Text("답을 보기 전에 먼저 떠올려 보세요. 틀려도 괜찮습니다. 떠올리려는 시도 자체가 기억을 강화합니다. 정답이 나오면 발음을 소리 내어 따라 해 보세요. 복습 시점은 기억이 흐려질 즈음으로 FSRS 가 정합니다.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

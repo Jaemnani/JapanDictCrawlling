@@ -7,6 +7,19 @@ struct ProgressData: Codable {
     var introducedPerDay: [String: Int] = [:] // "2026-09-26" -> 그날 처음 본 카드 수
     var reviewsPerDay: [String: Int] = [:]
     var log: [ReviewLogEntry] = []
+    var notes: [String: String] = [:]       // Word.id -> 사용자가 적은 연상 메모
+
+    init() {}
+
+    // 필드가 추가돼도 예전 파일을 읽을 수 있도록 없는 키는 기본값으로 둔다.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cards = try c.decodeIfPresent([String: FSRSCard].self, forKey: .cards) ?? [:]
+        introducedPerDay = try c.decodeIfPresent([String: Int].self, forKey: .introducedPerDay) ?? [:]
+        reviewsPerDay = try c.decodeIfPresent([String: Int].self, forKey: .reviewsPerDay) ?? [:]
+        log = try c.decodeIfPresent([ReviewLogEntry].self, forKey: .log) ?? []
+        notes = try c.decodeIfPresent([String: String].self, forKey: .notes) ?? [:]
+    }
 }
 
 enum ProgressStore {

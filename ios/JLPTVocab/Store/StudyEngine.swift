@@ -13,6 +13,7 @@ struct QueueCounts {
     var newRecognition = 0
     var newProduction = 0
     var reviewLaterToday = 0
+    var newThrottled = false  // 밀린 복습 때문에 신규를 줄였는지
 
     var total: Int { learning + review + newRecognition + newProduction }
 }
@@ -28,6 +29,9 @@ struct QueueCounts {
 final class StudyEngine: ObservableObject {
     static let learnAhead: TimeInterval = 20 * 60
     static let reviewsPerNew = 4
+    /// 밀린 복습이 신규 한도의 이 배수를 넘으면 신규를 절반으로, 두 배를 넘으면 멈춘다.
+    /// 도입 속도가 복습 처리량을 넘으면 적체가 끝없이 커진다 (Reddy et al. 2016). 배수 자체는 경험적 값.
+    static let backlogFactor = 5
 
     let words: [Word]
     let wordsByID: [String: Word]
@@ -124,10 +128,29 @@ final class StudyEngine: ObservableObject {
         c.learning = q.learningDue.count + q.learningSoon.count
         c.review = q.reviewDue.count
         c.reviewLaterToday = q.reviewLaterToday
-        c.newRecognition = remainingNew(.recognition, now: now, next: { self.nextNewRecognition(skip: $0) })
+        c.newRecognition = remainingNew(.recognition, now: now, backlog: q.reviewDue.count, next: { self.nextNewRecognition(skip: $0) })
         c.newProduction = settings.productionEnabled
-            ? remainingNew(.production, now: now, next: { self.nextNewProduction(skip: $0) }) : 0
+            ? remainingNew(.production, now: now, backlog: q.reviewDue.count, next: { self.nextNewProduction(skip: $0) }) : 0
+        c.newThrottled = effectiveLimit(settings.dailyNewLimit, backlog: q.reviewDue.count) < settings.dailyNewLimit
         return c
+    }
+
+    /// 아직 한 번도 안 본 단어를 지금 신규 한도로 다 여는 데 걸리는 날 수.
+    func daysToFinish() -> Int? {
+        let remaining = words.filter {
+            settings.enabledLevels.contains($0.level)
+                && progress.cards[CardKey(wordID: $0.id, direction: .recognition).string] == nil
+        }.count
+        guard settings.dailyNewLimit > 0 else { return nil }
+        return Int((Double(remaining) / Double(settings.dailyNewLimit)).rounded(.up))
+    }
+
+    func note(for word: Word) -> String { progress.notes[word.id] ?? "" }
+
+    func setNote(_ text: String, for word: Word) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        progress.notes[word.id] = trimmed.isEmpty ? nil : trimmed
+        ProgressStore.save(progress)
     }
 
     struct LevelStats {
@@ -207,7 +230,7 @@ final class StudyEngine: ObservableObject {
         s.learningDue.sort { $0.card.due < $1.card.due }
         s.learningSoon.sort { $0.card.due < $1.card.due }
         s.reviewDue.sort { $0.card.due < $1.card.due }
-        s.newItem = nextNewItem(now: now)
+        s.newItem = nextNewItem(now: now, backlog: s.reviewDue.count)
         return s
     }
 
@@ -219,12 +242,21 @@ final class StudyEngine: ObservableObject {
         progress.introducedPerDay[introducedKey(StudyDay.key(for: now), direction)] ?? 0
     }
 
-    private func nextNewItem(now: Date) -> StudyItem? {
-        if introducedToday(.recognition, now: now) < settings.dailyNewLimit, let w = nextNewRecognition(skip: 0) {
+    private func effectiveLimit(_ limit: Int, backlog: Int) -> Int {
+        let threshold = max(limit, 1) * Self.backlogFactor
+        if backlog > threshold * 2 { return 0 }
+        if backlog > threshold { return limit / 2 }
+        return limit
+    }
+
+    private func nextNewItem(now: Date, backlog: Int) -> StudyItem? {
+        let recLimit = effectiveLimit(settings.dailyNewLimit, backlog: backlog)
+        let prodLimit = effectiveLimit(settings.dailyNewProductionLimit, backlog: backlog)
+        if introducedToday(.recognition, now: now) < recLimit, let w = nextNewRecognition(skip: 0) {
             return StudyItem(key: CardKey(wordID: w.id, direction: .recognition), word: w, card: FSRSCard(due: now), isNew: true)
         }
         if settings.productionEnabled,
-           introducedToday(.production, now: now) < settings.dailyNewProductionLimit,
+           introducedToday(.production, now: now) < prodLimit,
            let w = nextNewProduction(skip: 0) {
             return StudyItem(key: CardKey(wordID: w.id, direction: .production), word: w, card: FSRSCard(due: now), isNew: true)
         }
@@ -232,8 +264,8 @@ final class StudyEngine: ObservableObject {
     }
 
     /// 오늘 남은 신규 카드 수 (한도와 후보 수 중 작은 값).
-    private func remainingNew(_ direction: CardDirection, now: Date, next: (Int) -> Word?) -> Int {
-        let limit = direction == .recognition ? settings.dailyNewLimit : settings.dailyNewProductionLimit
+    private func remainingNew(_ direction: CardDirection, now: Date, backlog: Int, next: (Int) -> Word?) -> Int {
+        let limit = effectiveLimit(direction == .recognition ? settings.dailyNewLimit : settings.dailyNewProductionLimit, backlog: backlog)
         let left = max(0, limit - introducedToday(direction, now: now))
         var n = 0
         while n < left, next(n) != nil { n += 1 }

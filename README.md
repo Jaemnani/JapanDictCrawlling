@@ -9,6 +9,8 @@
 | `jlpt_crawlling.py` | 네이버 JLPT 목록 크롤링 (JSON API, 품사 포함) | `naver_jlpt_words.xlsx`, `naver_jlpt_raw.json` |
 | `check_crawl.py` | 크롤링 결과 검증 (사이트 총 건수 비교 포함) | 콘솔 리포트 (문제 있으면 exit 1) |
 | `build_wordbook.py` | 크롤링 결과 → 단어장 | `wordbook/` |
+| `export_app_data.py` | 크롤링 결과 → iOS 앱 번들 데이터 | `ios/JLPTVocab/Resources/words.json` |
+| `ios/` | iOS 단어 학습 앱 (SwiftUI + FSRS) | |
 | `papago_translator.py` | 한국어 뜻 → 영어 → 12개 언어 번역 (Papago API). 예전 셀레니움 크롤러 출력 형식 기준 | `allclass_translator.xlsx` |
 
 ```bash
@@ -83,3 +85,25 @@ python build_wordbook.py naver_jlpt_words.xlsx --levels 4,5 --formats html --see
 - 한자 표기가 `後片付け·跡片付け·後片付け·跡片付け` 처럼 반복되면 중복을 제거한다.
 - 같은 레벨의 같은 단어가 여러 행이면(예전 품사별 결과) 한 카드로 합친다.
 - `--translations` 를 주면 `(일본어, 한국어 뜻)` 으로 매칭해서 영어 뜻을 붙인다.
+
+## 4. iOS 앱
+
+학습 방법의 연구 근거는 [docs/vocab_learning_research.md](docs/vocab_learning_research.md) 참고.
+
+```bash
+pip install hanja                                   # 한국 한자음 힌트용 (선택)
+python export_app_data.py naver_jlpt_words.xlsx     # -> ios/JLPTVocab/Resources/words.json
+open ios/JLPTVocab.xcodeproj                        # Xcode 16 이상, iOS 17 이상
+```
+
+Xcode 에서 Signing & Capabilities 의 Team 을 본인 계정으로 바꾸고 기기나 시뮬레이터에서 실행한다.
+`words.json` 은 네이버 사전 데이터라 레포에 넣지 않는다 (개인 학습용. 앱스토어 배포 시 라이선스 문제가 있음).
+
+| 기능 | 내용 |
+| --- | --- |
+| 스케줄링 | FSRS-6 (py-fsrs 6.3 포팅, `JLPTVocabTests/FSRSTests.swift` 에 py-fsrs 기대값 테스트) |
+| 카드 | 일본어 → 뜻(먼저), 안정도 7일 이상이면 뜻 → 일본어 추가 |
+| 신규 순서 | 쉬운 레벨부터. 레벨 안에서 섞고, 20개 안에 같은 읽기·같은 한자가 겹치지 않게 배치 |
+| 세션 | 학습 단계(1분·10분) → 복습 → 신규. 복습 4장마다 신규 1장. 밀린 복습이 많으면 신규 자동 감소 |
+| 정답 면 | 한자·가나·품사·뜻 전체, 일본어 음성 자동 재생, 한국 한자음 힌트, 연상 메모 |
+| 데이터 | 진도는 기기에 저장, JSON 내보내기/가져오기 (복습 기록 포함 → py-fsrs Optimizer 로 개인 파라미터 학습 가능) |
